@@ -1,0 +1,29 @@
+# Keil generated files
+Objects/
+Listings/
+DebugConfig/
+RTE/
+*.uvguix.*
+*.uvguix
+*.build_log.htm
+*.dep
+*.lnp
+*.map
+*.lst
+*.o
+*.d
+*.crf
+*.axf
+*.hex
+*.htm
+*.sct
+*.Bak
+*.log
+
+# Local backups and scratch files
+backup_before_opt/
+*.bak
+~$*
+
+# Local office/test files
+*.xlsx
