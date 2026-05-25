@@ -16,14 +16,12 @@ volatile uint8_t use_high_precision = 0;
 
 static void ResetCaptureState(void)
 {
-    __disable_irq();
     capture_start = 0;
     capture_end = 0;
     capture_period_ticks = 0;
     capture_overflow_count = 0;
     capture_flag = 0;
     capture_last_edge_ms = Timebase_Millis();
-    __enable_irq();
 }
 
 static uint32_t GetCaptureTimeoutMs(double last_frequency)
@@ -114,25 +112,10 @@ double Get_Frequency(void)
     static double last_frequency = 0.0;
     static uint8_t first_measurement = 1U;
     uint32_t now = Timebase_Millis();
-    uint32_t last_edge_ms;
-    uint32_t period_ticks;
-    uint8_t ready;
-    uint8_t high_precision;
     double timer_hz;
     double frequency;
 
-    __disable_irq();
-    last_edge_ms = capture_last_edge_ms;
-    period_ticks = capture_period_ticks;
-    ready = (capture_flag == 2U && period_ticks != 0U) ? 1U : 0U;
-    high_precision = use_high_precision;
-    if (ready)
-    {
-        capture_flag = 0U;
-    }
-    __enable_irq();
-
-    if ((uint32_t)(now - last_edge_ms) > GetCaptureTimeoutMs(last_frequency))
+    if ((uint32_t)(now - capture_last_edge_ms) > GetCaptureTimeoutMs(last_frequency))
     {
         ResetCaptureState();
         last_frequency = 0.0;
@@ -140,20 +123,21 @@ double Get_Frequency(void)
         return 0.0;
     }
 
-    if (!ready)
+    if (capture_flag != 2U || capture_period_ticks == 0U)
     {
         return last_frequency;
     }
 
-    timer_hz = high_precision ? HIGH_PRECISION_TIMER_HZ : LOW_PRECISION_TIMER_HZ;
-    frequency = timer_hz / (double)period_ticks;
+    timer_hz = use_high_precision ? HIGH_PRECISION_TIMER_HZ : LOW_PRECISION_TIMER_HZ;
+    frequency = timer_hz / (double)capture_period_ticks;
+    capture_flag = 0U;
 
     if (frequency < 0.1 || frequency > 1000.0)
     {
         return last_frequency;
     }
 
-    if (first_measurement || (!high_precision && frequency > 5.0))
+    if (first_measurement || (!use_high_precision && frequency > 5.0))
     {
         first_measurement = 0U;
         if (frequency > 5.0)
@@ -162,7 +146,7 @@ double Get_Frequency(void)
             return last_frequency;
         }
     }
-    else if (high_precision && frequency <= 3.0)
+    else if (use_high_precision && frequency <= 3.0)
     {
         Switch_Prescaler(0U);
         return last_frequency;

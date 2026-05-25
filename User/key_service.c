@@ -18,6 +18,11 @@ typedef struct {
 	uint32_t last_ms;
 } KeyState;
 
+static uint8_t KeyReadPressed(GPIO_TypeDef *port, uint16_t pin)
+{
+	return (GPIO_ReadInputDataBit(port, pin) == 0U) ? 1U : 0U;
+}
+
 static uint8_t KeyUpdate(KeyState *key, uint8_t raw, uint32_t debounce_ms, uint32_t longpress_ms)
 {
 	uint32_t now = Timebase_Millis();
@@ -75,7 +80,7 @@ static uint8_t KeyUpdate(KeyState *key, uint8_t raw, uint32_t debounce_ms, uint3
 void CheckModeSwitch(void)
 {
 	static KeyState mode_key = {0};
-	uint8_t event = KeyUpdate(&mode_key, GPIO_ReadInputDataBit(switch_GPIO_Port, switch_Pin), 50U, 1500U);
+	uint8_t event = KeyUpdate(&mode_key, KeyReadPressed(switch_GPIO_Port, switch_Pin), 50U, 1500U);
 
 	if (event == 1U)
 	{
@@ -92,7 +97,7 @@ void CheckModeSwitch(void)
 void CheckCancelSwitch(void)
 {
 	static KeyState cancel_key = {0};
-	uint8_t event = KeyUpdate(&cancel_key, GPIO_ReadInputDataBit(cancel_GPIO_Port, cancel_Pin), 50U, 800U);
+	uint8_t event = KeyUpdate(&cancel_key, KeyReadPressed(cancel_GPIO_Port, cancel_Pin), 50U, 800U);
 
 	if (event == 1U)
 	{
