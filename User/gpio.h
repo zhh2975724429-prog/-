@@ -19,11 +19,11 @@ void GPIO_TogglePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
 #define zCollect_Pin  GPIO_Pin_3
 #define zCollect_GPIO_Port GPIOA
 
-#define switch_Pin GPIO_Pin_4
+#define switch_Pin GPIO_Pin_9
 #define switch_GPIO_Port GPIOA
 
-#define cancel_Pin GPIO_Pin_1
-#define cancel_GPIO_Port GPIOB
+#define cancel_Pin GPIO_Pin_10
+#define cancel_GPIO_Port GPIOA
 #define switch0_Pin GPIO_Pin_9
 #define switch0_GPIO_Port GPIOB
 #define switch1_Pin GPIO_Pin_8
