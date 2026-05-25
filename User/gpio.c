@@ -53,24 +53,25 @@ void MX_GPIO_Init(void)
 	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPU;
 	GPIO_Init(cancel_GPIO_Port,&GPIO_InitStruct);
 
+	/* Gear inputs are active-low: idle high, active gear signal pulls the pin to GND. */
 	GPIO_InitStruct.GPIO_Pin=switch0_Pin;
-	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPD;
+	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPU;
 	GPIO_Init(switch0_GPIO_Port,&GPIO_InitStruct);
 	
 	GPIO_InitStruct.GPIO_Pin=switch1_Pin;
-	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPD;
+	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPU;
 	GPIO_Init(switch1_GPIO_Port,&GPIO_InitStruct);
 	
 	GPIO_InitStruct.GPIO_Pin=switch2_Pin;
-	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPD;
+	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPU;
 	GPIO_Init(switch2_GPIO_Port,&GPIO_InitStruct);
 	
 	GPIO_InitStruct.GPIO_Pin=switch3_Pin;
-	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPD;
+	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPU;
 	GPIO_Init(switch3_GPIO_Port,&GPIO_InitStruct);
 	
 	GPIO_InitStruct.GPIO_Pin=switch4_Pin;
-	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPD;
+	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPU;
 	GPIO_Init(switch4_GPIO_Port,&GPIO_InitStruct);
 
 	// ILI9341显示屏引脚初始化
