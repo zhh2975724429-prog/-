@@ -20,7 +20,7 @@ typedef struct {
 
 static uint8_t KeyReadPressed(GPIO_TypeDef *port, uint16_t pin)
 {
-	return (GPIO_ReadInputDataBit(port, pin) == 0U) ? 1U : 0U;
+	return (GPIO_ReadInputDataBit(port, pin) != 0U) ? 1U : 0U;
 }
 
 static uint8_t KeyUpdate(KeyState *key, uint8_t raw, uint32_t debounce_ms, uint32_t longpress_ms)

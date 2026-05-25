@@ -44,13 +44,13 @@ void MX_GPIO_Init(void)
 	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPD;
 	GPIO_Init(zCollect_GPIO_Port,&GPIO_InitStruct);
 	
-	/* Keys use the common wiring: pin -> key -> GND, so idle is high and pressed is low. */
+	/* Keys are active-high: idle low, pressed high. */
 	GPIO_InitStruct.GPIO_Pin=switch_Pin;
-	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPU;
+	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPD;
 	GPIO_Init(switch_GPIO_Port,&GPIO_InitStruct);
 
 	GPIO_InitStruct.GPIO_Pin=cancel_Pin;
-	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPU;
+	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPD;
 	GPIO_Init(cancel_GPIO_Port,&GPIO_InitStruct);
 
 	/* Gear inputs use the raw binary level: low = 0, high = 1. */
