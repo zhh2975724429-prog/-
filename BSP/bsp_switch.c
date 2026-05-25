@@ -1,18 +1,14 @@
 #include "bsp_switch.h"
 #include "gpio.h"
 
-static uint8_t ReadGearBit(GPIO_TypeDef *port, uint16_t pin)
-{
-    return (GPIO_ReadInputDataBit(port, pin) == 0U) ? 1U : 0U;
-}
-
 GearLevel GetCurrentGearRaw(void)
 {
-    uint8_t bit0 = ReadGearBit(switch0_GPIO_Port, switch0_Pin);
-    uint8_t bit1 = ReadGearBit(switch1_GPIO_Port, switch1_Pin);
-    uint8_t bit2 = ReadGearBit(switch2_GPIO_Port, switch2_Pin);
-    uint8_t bit3 = ReadGearBit(switch3_GPIO_Port, switch3_Pin);
-    uint8_t bit4 = ReadGearBit(switch4_GPIO_Port, switch4_Pin);
+    /* Gear code uses the raw GPIO level: low = 0, high = 1. */
+    uint8_t bit0 = GPIO_ReadInputDataBit(switch0_GPIO_Port, switch0_Pin);
+    uint8_t bit1 = GPIO_ReadInputDataBit(switch1_GPIO_Port, switch1_Pin);
+    uint8_t bit2 = GPIO_ReadInputDataBit(switch2_GPIO_Port, switch2_Pin);
+    uint8_t bit3 = GPIO_ReadInputDataBit(switch3_GPIO_Port, switch3_Pin);
+    uint8_t bit4 = GPIO_ReadInputDataBit(switch4_GPIO_Port, switch4_Pin);
     uint8_t code = (uint8_t)((bit4 << 4) | (bit3 << 3) | (bit2 << 2) | (bit1 << 1) | bit0);
 
     switch (code)

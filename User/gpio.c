@@ -53,7 +53,7 @@ void MX_GPIO_Init(void)
 	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPU;
 	GPIO_Init(cancel_GPIO_Port,&GPIO_InitStruct);
 
-	/* Gear inputs are active-low: idle high, active gear signal pulls the pin to GND. */
+	/* Gear inputs use the raw binary level: low = 0, high = 1. */
 	GPIO_InitStruct.GPIO_Pin=switch0_Pin;
 	GPIO_InitStruct.GPIO_Mode=GPIO_Mode_IPU;
 	GPIO_Init(switch0_GPIO_Port,&GPIO_InitStruct);
