@@ -4,7 +4,9 @@
 #define CURVE_COUNT 5U
 #define FLASH_STORAGE_ADDR 0x0800FC00UL
 #define STORAGE_MAGIC 0x5A5AU
-#define STORAGE_VERSION 1U
+#define STORAGE_VERSION 2U
+#define STORAGE_VERSION_V1 1U
+#define CURVE_VALID_MASK_ALL ((1UL << CURVE_COUNT) - 1UL)
 #define MIN_CAL_SPEED_DELTA 5.0f
 #define MIN_VALID_SPEED 0.1f
 #define MAX_VALID_SLOPE 10000.0f
@@ -14,10 +16,19 @@ typedef struct {
     uint16_t magic;
     uint16_t version;
     uint32_t checksum;
+    uint32_t valid_mask;
     WeightCurveParams curves[CURVE_COUNT];
 } WeightCurveStorage;
 
+typedef struct {
+    uint16_t magic;
+    uint16_t version;
+    uint32_t checksum;
+    WeightCurveParams curves[CURVE_COUNT];
+} WeightCurveStorageV1;
+
 static WeightCurveParams weightCurves[CURVE_COUNT];
+static uint32_t weightCurveValidMask = 0U;
 
 static uint8_t WeightCurveParamValid(const WeightCurveParams *curve)
 {
@@ -48,11 +59,11 @@ static void ClearWeightCurves(WeightCurveParams *curves)
     }
 }
 
-static uint8_t WeightCurveSetValid(const WeightCurveParams *curves)
+static uint8_t WeightCurveSetValid(const WeightCurveParams *curves, uint32_t validMask)
 {
     for (uint32_t i = 0; i < CURVE_COUNT; i++)
     {
-        if (!WeightCurveParamValid(&curves[i]))
+        if ((validMask & (1UL << i)) && !WeightCurveParamValid(&curves[i]))
         {
             return 0U;
         }
@@ -61,7 +72,12 @@ static uint8_t WeightCurveSetValid(const WeightCurveParams *curves)
     return 1U;
 }
 
-static uint32_t WeightCurveChecksum(const WeightCurveParams *curves)
+static uint8_t WeightCurveSetComplete(const WeightCurveParams *curves)
+{
+    return WeightCurveSetValid(curves, CURVE_VALID_MASK_ALL);
+}
+
+static uint32_t WeightCurveChecksumV1(const WeightCurveParams *curves)
 {
     const uint8_t *bytes = (const uint8_t *)curves;
     uint32_t checksum = 2166136261UL;
@@ -75,7 +91,28 @@ static uint32_t WeightCurveChecksum(const WeightCurveParams *curves)
     return checksum;
 }
 
-static uint8_t LoadLegacyCurves(WeightCurveParams *curves)
+static uint32_t WeightCurveChecksum(uint32_t validMask, const WeightCurveParams *curves)
+{
+    const uint8_t *maskBytes = (const uint8_t *)&validMask;
+    const uint8_t *curveBytes = (const uint8_t *)curves;
+    uint32_t checksum = 2166136261UL;
+
+    for (uint32_t i = 0; i < sizeof(validMask); i++)
+    {
+        checksum ^= maskBytes[i];
+        checksum *= 16777619UL;
+    }
+
+    for (uint32_t i = 0; i < sizeof(WeightCurveParams) * CURVE_COUNT; i++)
+    {
+        checksum ^= curveBytes[i];
+        checksum *= 16777619UL;
+    }
+
+    return checksum;
+}
+
+static uint32_t LoadLegacyCurves(WeightCurveParams *curves)
 {
     uint32_t addr = FLASH_STORAGE_ADDR + 2U;
     float *data = (float *)curves;
@@ -91,12 +128,14 @@ static uint8_t LoadLegacyCurves(WeightCurveParams *curves)
         data[i] = *((float *)(&floatData));
     }
 
-    return WeightCurveSetValid(curves);
+    return WeightCurveSetComplete(curves) ? CURVE_VALID_MASK_ALL : 0U;
 }
 
-static uint8_t LoadStoredCurves(WeightCurveParams *curves)
+static uint32_t LoadStoredCurves(WeightCurveParams *curves)
 {
     const WeightCurveStorage *stored = (const WeightCurveStorage *)FLASH_STORAGE_ADDR;
+    const WeightCurveStorageV1 *storedV1 = (const WeightCurveStorageV1 *)FLASH_STORAGE_ADDR;
+    uint32_t validMask;
 
     ClearWeightCurves(curves);
 
@@ -107,12 +146,18 @@ static uint8_t LoadStoredCurves(WeightCurveParams *curves)
 
     if (stored->version == STORAGE_VERSION)
     {
-        if (stored->checksum != WeightCurveChecksum(stored->curves))
+        validMask = stored->valid_mask & CURVE_VALID_MASK_ALL;
+        if (stored->valid_mask != validMask)
         {
             return 0U;
         }
 
-        if (!WeightCurveSetValid(stored->curves))
+        if (stored->checksum != WeightCurveChecksum(validMask, stored->curves))
+        {
+            return 0U;
+        }
+
+        if (!WeightCurveSetValid(stored->curves, validMask))
         {
             return 0U;
         }
@@ -122,7 +167,27 @@ static uint8_t LoadStoredCurves(WeightCurveParams *curves)
             curves[i] = stored->curves[i];
         }
 
-        return 1U;
+        return validMask;
+    }
+
+    if (storedV1->version == STORAGE_VERSION_V1)
+    {
+        if (storedV1->checksum != WeightCurveChecksumV1(storedV1->curves))
+        {
+            return 0U;
+        }
+
+        if (!WeightCurveSetComplete(storedV1->curves))
+        {
+            return 0U;
+        }
+
+        for (uint32_t i = 0; i < CURVE_COUNT; i++)
+        {
+            curves[i] = storedV1->curves[i];
+        }
+
+        return CURVE_VALID_MASK_ALL;
     }
 
     return LoadLegacyCurves(curves);
@@ -157,9 +222,11 @@ uint8_t CalibrateWeightCurve(GearLevel gear, double noLoadSpeed, double load2tSp
     {
         weightCurves[index].a = 0.0f;
         weightCurves[index].b = 0.0f;
+        weightCurveValidMask &= ~(1UL << index);
         return 0;
     }
 
+    weightCurveValidMask |= (1UL << index);
     return 1;
 }
 
@@ -179,6 +246,11 @@ float CalculateWeight(GearLevel gear, double speed)
     }
 
     index = (uint32_t)(gear - 1);
+    if ((weightCurveValidMask & (1UL << index)) == 0U)
+    {
+        return 0.0f;
+    }
+
     if (!WeightCurveParamValid(&weightCurves[index]))
     {
         return 0.0f;
@@ -203,7 +275,8 @@ void SaveWeightCurves(void)
 
     storage.magic = STORAGE_MAGIC;
     storage.version = STORAGE_VERSION;
-    storage.checksum = WeightCurveChecksum(weightCurves);
+    storage.valid_mask = weightCurveValidMask & CURVE_VALID_MASK_ALL;
+    storage.checksum = WeightCurveChecksum(storage.valid_mask, weightCurves);
     for (uint32_t i = 0; i < CURVE_COUNT; i++)
     {
         storage.curves[i] = weightCurves[i];
@@ -234,11 +307,38 @@ void SaveWeightCurves(void)
 
 void LoadWeightCurves(void)
 {
-    (void)LoadStoredCurves(weightCurves);
+    weightCurveValidMask = LoadStoredCurves(weightCurves) & CURVE_VALID_MASK_ALL;
 }
 
 uint8_t WeightCurvesValid(void)
 {
-    WeightCurveParams curves[CURVE_COUNT];
-    return LoadStoredCurves(curves);
+    return ((weightCurveValidMask & CURVE_VALID_MASK_ALL) == CURVE_VALID_MASK_ALL) ? 1U : 0U;
+}
+
+uint8_t GetWeightCurveValidMask(void)
+{
+    return (uint8_t)(weightCurveValidMask & CURVE_VALID_MASK_ALL);
+}
+
+void ClearWeightCurve(GearLevel gear)
+{
+    uint32_t index;
+
+    if (gear < GEAR_1 || gear > GEAR_5)
+    {
+        return;
+    }
+
+    index = (uint32_t)(gear - 1);
+    weightCurves[index].a = 0.0f;
+    weightCurves[index].b = 0.0f;
+    weightCurveValidMask &= ~(1UL << index);
+    SaveWeightCurves();
+}
+
+void ClearAllWeightCurves(void)
+{
+    ClearWeightCurves(weightCurves);
+    weightCurveValidMask = 0U;
+    SaveWeightCurves();
 }

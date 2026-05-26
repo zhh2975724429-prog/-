@@ -205,21 +205,22 @@ int main(void)
 	// 加载重量曲线参数
 	LoadWeightCurves();
 
-	if (WeightCurvesValid())
 	{
+		uint8_t curve_mask = GetWeightCurveValidMask();
+
 		for (int i = 0; i < 5; i++)
 		{
-			cal_complete[i] = 1;
+			cal_complete[i] = ((curve_mask & (1U << i)) != 0U) ? 1U : 0U;
 		}
-		CalibSetState(CAL_STATE_ALL_DONE);
-	}
-	else
-	{
-		for (int i = 0; i < 5; i++)
+
+		if (WeightCurvesValid())
 		{
-			cal_complete[i] = 0;
+			CalibSetState(CAL_STATE_ALL_DONE);
 		}
-		CalibSetState(CAL_STATE_SELECT_GEAR);
+		else
+		{
+			CalibSetState(CAL_STATE_SELECT_GEAR);
+		}
 	}
 	
 	// 再等待一段时间，让所有模块稳定
@@ -282,6 +283,7 @@ int main(void)
 						if (gear_now != GEAR_INVALID && cal_complete[gear_now - 1])
 						{
 							cal_complete[gear_now - 1] = 0;
+							ClearWeightCurve(gear_now);
 							current_cal_gear = gear_now;
 							no_load_speed = 0.0;
 							load_2t_speed = 0.0;
@@ -449,6 +451,7 @@ int main(void)
 						{
 							cal_complete[i] = 0;
 						}
+						ClearAllWeightCurves();
 						current_cal_gear = GEAR_INVALID;
 						no_load_speed = 0.0;
 						load_2t_speed = 0.0;

@@ -14,7 +14,7 @@ volatile uint32_t capture_last_edge_ms = 0;
 volatile uint8_t capture_flag = 0;
 volatile uint8_t use_high_precision = 0;
 
-static void ResetCaptureState(void)
+static void ResetCaptureStateCore(void)
 {
     capture_start = 0;
     capture_end = 0;
@@ -22,6 +22,30 @@ static void ResetCaptureState(void)
     capture_overflow_count = 0;
     capture_flag = 0;
     capture_last_edge_ms = Timebase_Millis();
+}
+
+static void ResetCaptureState(void)
+{
+    NVIC_DisableIRQ(TIM2_IRQn);
+    ResetCaptureStateCore();
+    NVIC_ClearPendingIRQ(TIM2_IRQn);
+    NVIC_EnableIRQ(TIM2_IRQn);
+}
+
+static uint8_t TakeCapturePeriod(uint32_t *period_ticks)
+{
+    uint8_t ready = 0U;
+
+    NVIC_DisableIRQ(TIM2_IRQn);
+    if (capture_flag == 2U && capture_period_ticks != 0U)
+    {
+        *period_ticks = capture_period_ticks;
+        capture_flag = 0U;
+        ready = 1U;
+    }
+    NVIC_EnableIRQ(TIM2_IRQn);
+
+    return ready;
 }
 
 static uint32_t GetCaptureTimeoutMs(double last_frequency)
@@ -91,6 +115,8 @@ void Switch_Prescaler(uint8_t high_precision)
 {
     TIM_TimeBaseInitTypeDef timeBaseInitStruct;
 
+    NVIC_DisableIRQ(TIM2_IRQn);
+    TIM_ITConfig(TIM2, TIM_IT_Update | TIM_IT_CC4, DISABLE);
     TIM_Cmd(TIM2, DISABLE);
 
     timeBaseInitStruct.TIM_Period = 0xFFFF;
@@ -101,10 +127,14 @@ void Switch_Prescaler(uint8_t high_precision)
 
     TIM_SetCounter(TIM2, 0);
     TIM_ClearFlag(TIM2, TIM_FLAG_Update | TIM_FLAG_CC4);
+    TIM_ClearITPendingBit(TIM2, TIM_IT_Update | TIM_IT_CC4);
     use_high_precision = high_precision ? 1U : 0U;
-    ResetCaptureState();
+    ResetCaptureStateCore();
 
+    TIM_ITConfig(TIM2, TIM_IT_Update | TIM_IT_CC4, ENABLE);
     TIM_Cmd(TIM2, ENABLE);
+    NVIC_ClearPendingIRQ(TIM2_IRQn);
+    NVIC_EnableIRQ(TIM2_IRQn);
 }
 
 double Get_Frequency(void)
@@ -112,6 +142,7 @@ double Get_Frequency(void)
     static double last_frequency = 0.0;
     static uint8_t first_measurement = 1U;
     uint32_t now = Timebase_Millis();
+    uint32_t period_ticks = 0U;
     double timer_hz;
     double frequency;
 
@@ -123,14 +154,13 @@ double Get_Frequency(void)
         return 0.0;
     }
 
-    if (capture_flag != 2U || capture_period_ticks == 0U)
+    if (!TakeCapturePeriod(&period_ticks))
     {
         return last_frequency;
     }
 
     timer_hz = use_high_precision ? HIGH_PRECISION_TIMER_HZ : LOW_PRECISION_TIMER_HZ;
-    frequency = timer_hz / (double)capture_period_ticks;
-    capture_flag = 0U;
+    frequency = timer_hz / (double)period_ticks;
 
     if (frequency < 0.1 || frequency > 1000.0)
     {

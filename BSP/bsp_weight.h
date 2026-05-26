@@ -14,5 +14,8 @@ float CalculateWeight(GearLevel gear, double speed);
 void SaveWeightCurves(void);
 void LoadWeightCurves(void);
 uint8_t WeightCurvesValid(void);
+uint8_t GetWeightCurveValidMask(void);
+void ClearWeightCurve(GearLevel gear);
+void ClearAllWeightCurves(void);
 
 #endif
