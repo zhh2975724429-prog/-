@@ -29,12 +29,14 @@ static uint8_t cal_complete[5] = {0};  // 记录各挡位的标定状态
 static uint8_t cal_ui_dirty = 1;
 static uint8_t cal_refresh_div = 0;
 static uint8_t cal_need_recapture = 0;
+static uint8_t cal_last_drawn_gear = 0xFF;
 
 static void CalibSetState(CalibrationState s)
 {
 	cal_state = s;
 	cal_ui_dirty = 1;
 	cal_refresh_div = 0;
+	cal_last_drawn_gear = 0xFF;
 }
 
 static void SaveCalibrationResult(void)
@@ -80,6 +82,106 @@ static double SampleMotorSpeed(uint8_t samples)
 		Delay_ms(30);
 	}
 	return sum / samples;
+}
+
+#define CAL_COLOR_BG        ILI9341_BLACK
+#define CAL_COLOR_HEADER    0x013F
+#define CAL_COLOR_PANEL     0x1082
+#define CAL_COLOR_PANEL_2   0x2104
+#define CAL_COLOR_LINE      0x7BEF
+
+static const char *CalGearText(GearLevel gear)
+{
+	switch (gear)
+	{
+	case GEAR_1: return "G1";
+	case GEAR_2: return "G2";
+	case GEAR_3: return "G3";
+	case GEAR_4: return "G4";
+	case GEAR_5: return "G5";
+	default:     return "--";
+	}
+}
+
+static void CalDrawGearBadge(GearLevel gear)
+{
+	ILI9341_FillRect(176, 7, 232, 33, CAL_COLOR_HEADER);
+	ILI9341_DrawRect(176, 7, 232, 33, ILI9341_CYAN);
+	ILI9341_PutString(188, 8, CalGearText(gear), ILI9341_CYAN, CAL_COLOR_HEADER, 2);
+}
+
+static void CalDrawBase(const char *hint)
+{
+	cal_last_drawn_gear = 0xFF;
+	ILI9341_Clear(CAL_COLOR_BG);
+	ILI9341_FillRect(0, 0, 239, 39, CAL_COLOR_HEADER);
+	ILI9341_PutString(12, 8, "\xE6\xA8\xA1\xE5\xBC\x8F:\xE6\xA0\x87\xE5\xAE\x9A", ILI9341_WHITE, CAL_COLOR_HEADER, 2);
+	ILI9341_DrawLine(0, 40, 239, 40, ILI9341_CYAN);
+	if (hint != 0)
+	{
+		ILI9341_PutString(12, 50, hint, ILI9341_YELLOW, CAL_COLOR_BG, 1);
+	}
+}
+
+static void CalDrawProgress(void)
+{
+	char buffer[8];
+
+	ILI9341_PutString(12, 74, "\xE5\xAE\x8C\xE6\x88\x90", ILI9341_WHITE, CAL_COLOR_BG, 1);
+	for (uint8_t i = 0; i < 5; i++)
+	{
+		uint16_t x = (uint16_t)(12 + i * 45);
+		uint16_t fill = cal_complete[i] ? ILI9341_GREEN : CAL_COLOR_PANEL;
+		uint16_t text = cal_complete[i] ? ILI9341_BLACK : ILI9341_WHITE;
+		ILI9341_FillRect(x, 96, (uint16_t)(x + 35), 121, fill);
+		ILI9341_DrawRect(x, 96, (uint16_t)(x + 35), 121, cal_complete[i] ? ILI9341_GREEN : CAL_COLOR_LINE);
+		snprintf(buffer, sizeof(buffer), "G%d", i + 1);
+		ILI9341_PutString((uint16_t)(x + 9), 101, buffer, text, fill, 1);
+	}
+}
+
+static void CalDrawFooter(const char *left, const char *right)
+{
+	ILI9341_FillRect(0, 286, 239, 319, CAL_COLOR_PANEL_2);
+	ILI9341_DrawLine(0, 286, 239, 286, CAL_COLOR_LINE);
+	if (left != 0)
+	{
+		ILI9341_PutString(10, 296, left, ILI9341_WHITE, CAL_COLOR_PANEL_2, 1);
+	}
+	if (right != 0)
+	{
+		ILI9341_PutString(132, 296, right, ILI9341_YELLOW, CAL_COLOR_PANEL_2, 1);
+	}
+}
+
+static void CalDrawGearFocus(GearLevel gear)
+{
+	char buffer[24];
+
+	ILI9341_FillRect(0, 135, 239, 205, CAL_COLOR_PANEL);
+	ILI9341_DrawLine(0, 135, 239, 135, ILI9341_CYAN);
+	ILI9341_DrawLine(0, 205, 239, 205, ILI9341_CYAN);
+	ILI9341_PutString(16, 148, "\xE6\x8C\xA1\xE4\xBD\x8D:", ILI9341_WHITE, CAL_COLOR_PANEL, 2);
+	snprintf(buffer, sizeof(buffer), "%s", CalGearText(gear));
+	ILI9341_PutString(126, 146, buffer, ILI9341_CYAN, CAL_COLOR_PANEL, 3);
+
+	ILI9341_FillRect(10, 218, 229, 243, CAL_COLOR_BG);
+	if (gear >= GEAR_1 && gear <= GEAR_5 && cal_complete[gear - 1])
+	{
+		ILI9341_PutString(12, 222, "\xE5\xAE\x8C\xE6\x88\x90  PA10\xE9\x95\xBF\xE6\x8C\x89=\xE5\xA4\x8D\xE4\xBD\x8D", ILI9341_YELLOW, CAL_COLOR_BG, 1);
+	}
+}
+
+static void CalDrawSpeedBox(uint16_t y, const char *label, double speed, uint16_t color)
+{
+	char buffer[24];
+
+	ILI9341_FillRect(12, y, 227, (uint16_t)(y + 55), CAL_COLOR_PANEL);
+	ILI9341_DrawRect(12, y, 227, (uint16_t)(y + 55), CAL_COLOR_LINE);
+	ILI9341_PutString(22, (uint16_t)(y + 6), label, ILI9341_WHITE, CAL_COLOR_PANEL, 1);
+	snprintf(buffer, sizeof(buffer), "%4.0f  ", speed);
+	ILI9341_PutString(22, (uint16_t)(y + 25), buffer, color, CAL_COLOR_PANEL, 2);
+	ILI9341_PutRMin(130, (uint16_t)(y + 29), color, CAL_COLOR_PANEL, 1);
 }
 
 int main(void)
@@ -162,42 +264,16 @@ int main(void)
 
 					if (cal_ui_dirty)
 					{
-						char buffer[32];
-						ILI9341_Clear(ILI9341_BLACK);
-						ILI9341_PutString(10, 10, "\xE6\xA8\xA1\xE5\xBC\x8F:\xE6\xA0\x87\xE5\xAE\x9A", ILI9341_WHITE, ILI9341_BLACK, 2);
-						ILI9341_PutString(10, 60, "\xE6\x8C\xA1\xE4\xBD\x8D 1-5", ILI9341_YELLOW, ILI9341_BLACK, 1);
-						ILI9341_PutString(10, 80, "\xE6\x8C\x89=\xE5\xBC\x80\xE5\xA7\x8B", ILI9341_YELLOW, ILI9341_BLACK, 1);
-						ILI9341_PutString(10, 290, "PB1=\xE8\xBF\x94\xE5\x9B\x9E \xE9\x95\xBF\xE6\x8C\x89=\xE5\xA4\x8D\xE4\xBD\x8D", ILI9341_WHITE, ILI9341_BLACK, 1);
-						ILI9341_PutString(10, 105, "\xE5\xAE\x8C\xE6\x88\x90:", ILI9341_WHITE, ILI9341_BLACK, 1);
-						for (int i = 0; i < 5; i++)
-						{
-							snprintf(buffer, sizeof(buffer), "G%d:%s", i+1, cal_complete[i] ? "OK " : "-- ");
-							ILI9341_PutString(10 + (i * 40), 125, buffer, cal_complete[i] ? ILI9341_GREEN : ILI9341_RED, ILI9341_BLACK, 1);
-						}
+						CalDrawBase("PA9=\xE5\xBC\x80\xE5\xA7\x8B");
+						CalDrawProgress();
+						CalDrawFooter("PA9=\xE5\xBC\x80\xE5\xA7\x8B", "PA10\xE9\x95\xBF\xE6\x8C\x89=\xE5\xA4\x8D\xE4\xBD\x8D");
 						cal_ui_dirty = 0;
 					}
 
+					if (cal_last_drawn_gear != (uint8_t)gear_now)
 					{
-						char buffer[32];
-						if (gear_now == GEAR_INVALID)
-						{
-							ILI9341_PutString(10, 150, "\xE6\x8C\xA1\xE4\xBD\x8D: -- ", ILI9341_CYAN, ILI9341_BLACK, 2);
-							ILI9341_PutString(10, 220, "                ", ILI9341_WHITE, ILI9341_BLACK, 1);
-						}
-						else
-						{
-							snprintf(buffer, sizeof(buffer), "\xE6\x8C\xA1\xE4\xBD\x8D: G%d ", (int)gear_now);
-							ILI9341_PutString(10, 150, buffer, ILI9341_CYAN, ILI9341_BLACK, 2);
-
-							if (cal_complete[gear_now - 1])
-							{
-								ILI9341_PutString(10, 220, "\xE5\xAE\x8C\xE6\x88\x90 \xE9\x95\xBF\xE6\x8C\x89PB1", ILI9341_WHITE, ILI9341_BLACK, 1);
-							}
-							else
-							{
-								ILI9341_PutString(10, 220, "                ", ILI9341_WHITE, ILI9341_BLACK, 1);
-							}
-						}
+						CalDrawGearFocus(gear_now);
+						cal_last_drawn_gear = (uint8_t)gear_now;
 					}
 
 					if (cancel_long_pressed)
@@ -241,23 +317,17 @@ int main(void)
 					}
 					if (cal_ui_dirty)
 					{
-						char buffer[32];
-						ILI9341_Clear(ILI9341_BLACK);
-						ILI9341_PutString(10, 10, "\xE6\xA8\xA1\xE5\xBC\x8F:\xE6\xA0\x87\xE5\xAE\x9A", ILI9341_WHITE, ILI9341_BLACK, 2);
-						snprintf(buffer, sizeof(buffer), "\xE6\x8C\xA1\xE4\xBD\x8D: G%d ", (int)current_cal_gear);
-						ILI9341_PutString(10, 60, buffer, ILI9341_CYAN, ILI9341_BLACK, 2);
-						ILI9341_PutString(10, 110, "\xE6\x8C\x89=\xE9\x87\x87\xE9\x9B\x86" "0T", ILI9341_YELLOW, ILI9341_BLACK, 1);
-						ILI9341_PutString(10, 290, "PB1=\xE5\x8F\x96\xE6\xB6\x88", ILI9341_WHITE, ILI9341_BLACK, 1);
+						CalDrawBase("PA9=\xE9\x87\x87\xE9\x9B\x86" "0T");
+						CalDrawGearBadge(current_cal_gear);
+						CalDrawProgress();
+						CalDrawFooter("PA9=\xE9\x87\x87\xE9\x9B\x86" "0T", "PA10=\xE5\x8F\x96\xE6\xB6\x88");
 						cal_ui_dirty = 0;
 					}
 
 					if (cal_refresh_div == 0)
 					{
-						char buffer[32];
 						double live_speed = GetMotorSpeed();
-						snprintf(buffer, sizeof(buffer), "\xE8\xBD\xAC\xE9\x80\x9F:%4.0f  ", live_speed);
-						ILI9341_PutString(10, 160, buffer, ILI9341_GREEN, ILI9341_BLACK, 2);
-						ILI9341_PutRMin(160, 160, ILI9341_GREEN, ILI9341_BLACK, 2);
+						CalDrawSpeedBox(150, "0T LIVE", live_speed, ILI9341_GREEN);
 					}
 					cal_refresh_div = (cal_refresh_div + 1) % 3;
 
@@ -279,16 +349,11 @@ int main(void)
 					}
 					if (cal_ui_dirty)
 					{
-						char buffer[32];
-						ILI9341_Clear(ILI9341_BLACK);
-						ILI9341_PutString(10, 10, "\xE6\xA8\xA1\xE5\xBC\x8F:\xE6\xA0\x87\xE5\xAE\x9A", ILI9341_WHITE, ILI9341_BLACK, 2);
-						snprintf(buffer, sizeof(buffer), "\xE6\x8C\xA1\xE4\xBD\x8D: G%d ", (int)current_cal_gear);
-						ILI9341_PutString(10, 60, buffer, ILI9341_CYAN, ILI9341_BLACK, 2);
-						snprintf(buffer, sizeof(buffer), "\xE8\xBD\xAC\xE9\x80\x9F:%4.0f  ", no_load_speed);
-						ILI9341_PutString(10, 120, buffer, ILI9341_GREEN, ILI9341_BLACK, 2);
-						ILI9341_PutRMin(160, 120, ILI9341_GREEN, ILI9341_BLACK, 2);
-						ILI9341_PutString(10, 200, "\xE6\x8C\x89=\xE7\xA1\xAE\xE8\xAE\xA4", ILI9341_YELLOW, ILI9341_BLACK, 1);
-						ILI9341_PutString(10, 290, "PB1=\xE5\x8F\x96\xE6\xB6\x88", ILI9341_WHITE, ILI9341_BLACK, 1);
+						CalDrawBase("PA9=\xE7\xA1\xAE\xE8\xAE\xA4");
+						CalDrawGearBadge(current_cal_gear);
+						CalDrawProgress();
+						CalDrawSpeedBox(150, "0T", no_load_speed, ILI9341_GREEN);
+						CalDrawFooter("PA9=\xE7\xA1\xAE\xE8\xAE\xA4", "PA10=\xE5\x8F\x96\xE6\xB6\x88");
 						cal_ui_dirty = 0;
 					}
 
@@ -309,25 +374,18 @@ int main(void)
 					}
 					if (cal_ui_dirty)
 					{
-						char buffer[32];
-						ILI9341_Clear(ILI9341_BLACK);
-						ILI9341_PutString(10, 10, "\xE6\xA8\xA1\xE5\xBC\x8F:\xE6\xA0\x87\xE5\xAE\x9A", ILI9341_WHITE, ILI9341_BLACK, 2);
-						snprintf(buffer, sizeof(buffer), "\xE6\x8C\xA1\xE4\xBD\x8D: G%d ", (int)current_cal_gear);
-						ILI9341_PutString(10, 60, buffer, ILI9341_CYAN, ILI9341_BLACK, 2);
-						snprintf(buffer, sizeof(buffer), "\xE7\xA9\xBA\xE8\xBD\xBD:%5.0f   ", no_load_speed);
-						ILI9341_PutString(10, 110, buffer, ILI9341_YELLOW, ILI9341_BLACK, 2);
-						ILI9341_PutString(10, 160, "\xE6\x8C\x89=\xE9\x87\x87\xE9\x9B\x86" "2T", ILI9341_YELLOW, ILI9341_BLACK, 1);
-						ILI9341_PutString(10, 290, "PB1=\xE5\x8F\x96\xE6\xB6\x88", ILI9341_WHITE, ILI9341_BLACK, 1);
+						CalDrawBase("PA9=\xE9\x87\x87\xE9\x9B\x86" "2T");
+						CalDrawGearBadge(current_cal_gear);
+						CalDrawProgress();
+						CalDrawSpeedBox(132, "0T", no_load_speed, ILI9341_YELLOW);
+						CalDrawFooter("PA9=\xE9\x87\x87\xE9\x9B\x86" "2T", "PA10=\xE5\x8F\x96\xE6\xB6\x88");
 						cal_ui_dirty = 0;
 					}
 
 					if (cal_refresh_div == 0)
 					{
-						char buffer[32];
 						double live_speed = GetMotorSpeed();
-						snprintf(buffer, sizeof(buffer), "\xE8\xBD\xAC\xE9\x80\x9F:%4.0f  ", live_speed);
-						ILI9341_PutString(10, 200, buffer, ILI9341_GREEN, ILI9341_BLACK, 2);
-						ILI9341_PutRMin(160, 200, ILI9341_GREEN, ILI9341_BLACK, 2);
+						CalDrawSpeedBox(204, "2T LIVE", live_speed, ILI9341_GREEN);
 					}
 					cal_refresh_div = (cal_refresh_div + 1) % 3;
 
@@ -349,16 +407,13 @@ int main(void)
 					}
 					if (cal_ui_dirty)
 					{
-						char buffer[32];
-						ILI9341_Clear(ILI9341_BLACK);
-						ILI9341_PutString(10, 10, "\xE6\xA8\xA1\xE5\xBC\x8F:\xE6\xA0\x87\xE5\xAE\x9A", ILI9341_WHITE, ILI9341_BLACK, 2);
-						snprintf(buffer, sizeof(buffer), "\xE6\x8C\xA1\xE4\xBD\x8D: G%d ", (int)current_cal_gear);
-						ILI9341_PutString(10, 60, buffer, ILI9341_CYAN, ILI9341_BLACK, 2);
-						snprintf(buffer, sizeof(buffer), "\xE8\xBD\xAC\xE9\x80\x9F:%4.0f  ", load_2t_speed);
-						ILI9341_PutString(10, 120, buffer, ILI9341_GREEN, ILI9341_BLACK, 2);
-						ILI9341_PutRMin(160, 120, ILI9341_GREEN, ILI9341_BLACK, 2);
-						ILI9341_PutString(10, 200, cal_need_recapture ? "\xE6\x8C\x89=\xE9\x87\x8D\xE9\x87\x87\xE9\x9B\x86" : "\xE6\x8C\x89=\xE7\xA1\xAE\xE8\xAE\xA4", ILI9341_YELLOW, ILI9341_BLACK, 1);
-						ILI9341_PutString(10, 290, "PB1=\xE5\x8F\x96\xE6\xB6\x88", ILI9341_WHITE, ILI9341_BLACK, 1);
+						const char *action = cal_need_recapture ? "PA9=\xE9\x87\x8D\xE9\x87\x87\xE9\x9B\x86" : "PA9=\xE7\xA1\xAE\xE8\xAE\xA4";
+						CalDrawBase(action);
+						CalDrawGearBadge(current_cal_gear);
+						CalDrawProgress();
+						CalDrawSpeedBox(132, "0T", no_load_speed, ILI9341_YELLOW);
+						CalDrawSpeedBox(204, "2T", load_2t_speed, cal_need_recapture ? ILI9341_RED : ILI9341_GREEN);
+						CalDrawFooter(action, "PA10=\xE5\x8F\x96\xE6\xB6\x88");
 						cal_ui_dirty = 0;
 					}
 
@@ -402,12 +457,13 @@ int main(void)
 					}
 					if (cal_ui_dirty)
 					{
-						ILI9341_Clear(ILI9341_BLACK);
-						ILI9341_PutString(10, 10, "\xE6\xA8\xA1\xE5\xBC\x8F:\xE6\xA0\x87\xE5\xAE\x9A", ILI9341_WHITE, ILI9341_BLACK, 2);
-						ILI9341_PutString(10, 70, "\xE5\x85\xA8\xE9\x83\xA8\xE5\xAE\x8C\xE6\x88\x90", ILI9341_GREEN, ILI9341_BLACK, 2);
-						ILI9341_PutString(10, 140, "\xE8\xBF\x9B\xE5\x85\xA5\xE7\x9B\x91\xE6\xB5\x8B?", ILI9341_YELLOW, ILI9341_BLACK, 1);
-						ILI9341_PutString(10, 160, "\xE6\x8C\x89=\xE8\xBF\x9B\xE5\x85\xA5", ILI9341_YELLOW, ILI9341_BLACK, 1);
-						ILI9341_PutString(10, 290, "PB1=\xE5\x8F\x96\xE6\xB6\x88", ILI9341_WHITE, ILI9341_BLACK, 1);
+						CalDrawBase("PA9=\xE8\xBF\x9B\xE5\x85\xA5\xE7\x9B\x91\xE6\xB5\x8B");
+						CalDrawProgress();
+						ILI9341_FillRect(0, 138, 239, 210, CAL_COLOR_PANEL);
+						ILI9341_DrawLine(0, 138, 239, 138, ILI9341_GREEN);
+						ILI9341_DrawLine(0, 210, 239, 210, ILI9341_GREEN);
+						ILI9341_PutString(24, 158, "\xE5\x85\xA8\xE9\x83\xA8\xE5\xAE\x8C\xE6\x88\x90", ILI9341_GREEN, CAL_COLOR_PANEL, 2);
+						CalDrawFooter("PA9=\xE8\xBF\x9B\xE5\x85\xA5", "PA10=\xE5\x8F\x96\xE6\xB6\x88");
 						cal_ui_dirty = 0;
 					}
 

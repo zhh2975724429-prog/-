@@ -148,6 +148,77 @@ void ILI9341_DrawPixel(uint16_t x, uint16_t y, uint16_t color) {
     ILI9341_CS_HIGH();
 }
 
+// ==================== Basic drawing primitives ====================
+void ILI9341_FillRect(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color) {
+    uint32_t pixels;
+
+    if (x1 >= ILI9341_WIDTH || y1 >= ILI9341_HEIGHT) return;
+    if (x2 >= ILI9341_WIDTH) x2 = ILI9341_WIDTH - 1;
+    if (y2 >= ILI9341_HEIGHT) y2 = ILI9341_HEIGHT - 1;
+    if (x2 < x1 || y2 < y1) return;
+
+    pixels = (uint32_t)(x2 - x1 + 1) * (uint32_t)(y2 - y1 + 1);
+    ILI9341_SetWindow(x1, y1, x2, y2);
+    ILI9341_DC_HIGH();
+    ILI9341_CS_LOW();
+    while (pixels--) {
+        ILI9341_SPI_Send(color >> 8);
+        ILI9341_SPI_Send(color & 0xFF);
+    }
+    ILI9341_CS_HIGH();
+}
+
+void ILI9341_DrawLine(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color) {
+    int16_t dx, dy, sx, sy, err, e2;
+
+    if (x1 == x2) {
+        if (y2 < y1) {
+            uint16_t t = y1;
+            y1 = y2;
+            y2 = t;
+        }
+        ILI9341_FillRect(x1, y1, x2, y2, color);
+        return;
+    }
+
+    if (y1 == y2) {
+        if (x2 < x1) {
+            uint16_t t = x1;
+            x1 = x2;
+            x2 = t;
+        }
+        ILI9341_FillRect(x1, y1, x2, y2, color);
+        return;
+    }
+
+    dx = (x1 > x2) ? (int16_t)(x1 - x2) : (int16_t)(x2 - x1);
+    dy = (y1 > y2) ? (int16_t)(y1 - y2) : (int16_t)(y2 - y1);
+    sx = (x1 < x2) ? 1 : -1;
+    sy = (y1 < y2) ? 1 : -1;
+    err = (dx > dy ? dx : -dy) / 2;
+
+    while (1) {
+        ILI9341_DrawPixel(x1, y1, color);
+        if (x1 == x2 && y1 == y2) break;
+        e2 = err;
+        if (e2 > -dx) {
+            err -= dy;
+            x1 = (uint16_t)((int16_t)x1 + sx);
+        }
+        if (e2 < dy) {
+            err += dx;
+            y1 = (uint16_t)((int16_t)y1 + sy);
+        }
+    }
+}
+
+void ILI9341_DrawRect(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color) {
+    ILI9341_DrawLine(x1, y1, x2, y1, color);
+    ILI9341_DrawLine(x2, y1, x2, y2, color);
+    ILI9341_DrawLine(x2, y2, x1, y2, color);
+    ILI9341_DrawLine(x1, y2, x1, y1, color);
+}
+
 // ==================== 标准 8x16 ASCII 字库 ====================
 void ILI9341_PutChar(uint16_t x, uint16_t y, char c, uint16_t color, uint16_t bg, uint8_t size) {
     static const uint8_t font8x16[96][16] = {
