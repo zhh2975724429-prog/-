@@ -182,29 +182,22 @@ static void setCalibrationSpeedUi(GearLevel gear, const char *prefix, double spe
 	setCalibrationUi(gear, cal_status_buffer, CAL_COLOR_MUTED, left_tip, right_tip);
 }
 
-static const char *calSelectStatusText(GearLevel gear)
+static void setCalibrationSelectUi(GearLevel gear)
 {
 	if (gear < GEAR_1 || gear > GEAR_5)
 	{
-		return "--";
+		setCalibrationUi(gear, "--", CAL_COLOR_MUTED, "G1-G5", "");
 	}
-
-	if (gear >= GEAR_1 && gear <= GEAR_5 && cal_complete[gear - 1])
+	else if (cal_complete[gear - 1])
 	{
-		return "\xE5\xAE\x8C\xE6\x88\x90";
+		setCalibrationUi(gear, "\xE5\xAE\x8C\xE6\x88\x90", CAL_COLOR_DONE,
+			"\xE5\xAE\x8C\xE6\x88\x90", "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE5\xA4\x8D\xE4\xBD\x8D");
 	}
-
-	return "\xE9\x87\x87\xE9\x9B\x86";
-}
-
-static uint16_t calSelectStatusColor(GearLevel gear)
-{
-	if (gear >= GEAR_1 && gear <= GEAR_5 && cal_complete[gear - 1])
+	else
 	{
-		return CAL_COLOR_DONE;
+		setCalibrationUi(gear, "\xE9\x87\x87\xE9\x9B\x86", CAL_COLOR_MUTED,
+			"PA9 \xE5\xBC\x80\xE5\xA7\x8B", "");
 	}
-
-	return CAL_COLOR_MUTED;
 }
 
 static void drawButtonFrame(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t fill, uint16_t border, uint8_t strong)
@@ -361,18 +354,17 @@ int main(void)
 
 					if (cal_ui_dirty)
 					{
-						setCalibrationUi(gear_now, calSelectStatusText(gear_now), calSelectStatusColor(gear_now),
-							"PA9 \xE7\xA1\xAE\xE8\xAE\xA4", "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE5\xA4\x8D\xE4\xBD\x8D");
+						setCalibrationSelectUi(gear_now);
 						drawCalibrationScreen();
 						cal_ui_dirty = 0;
 					}
 
 					if (cal_last_drawn_gear != (uint8_t)gear_now)
 					{
-						setCalibrationUi(gear_now, calSelectStatusText(gear_now), calSelectStatusColor(gear_now),
-							"PA9 \xE7\xA1\xAE\xE8\xAE\xA4", "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE5\xA4\x8D\xE4\xBD\x8D");
+						setCalibrationSelectUi(gear_now);
 						drawCalibrationCard();
 						drawGearButtons();
+						drawBottomTips();
 						cal_last_drawn_gear = (uint8_t)gear_now;
 					}
 
