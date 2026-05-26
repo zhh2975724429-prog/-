@@ -6,6 +6,7 @@
   */
 
 #include "stm32f10x_it.h"
+#include "bsp_direction.h"
 #include "bsp_input_capture.h"
 #include "timebase.h"
 
@@ -98,5 +99,6 @@ void TIM4_IRQHandler(void)
     {
         TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
         Timebase_TickIrq();
+        Direction_Update1ms();
     }
 }
