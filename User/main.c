@@ -368,6 +368,11 @@ int main(void)
 						cal_last_drawn_gear = (uint8_t)gear_now;
 					}
 
+					if (cancel_pressed)
+					{
+						cancel_pressed = 0;
+					}
+
 					if (cancel_long_pressed)
 					{
 						cancel_long_pressed = 0;
@@ -393,6 +398,13 @@ int main(void)
 								current_cal_gear = gear_now;
 								CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
 							}
+						}
+						else
+						{
+							setCalibrationUi(GEAR_INVALID, "NO GEAR", ILI9341_RED, "G1-G5", "");
+							drawCalibrationCard();
+							drawBottomTips();
+							cal_last_drawn_gear = (uint8_t)gear_now;
 						}
 					}
 					break;
