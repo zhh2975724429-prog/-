@@ -558,21 +558,24 @@ int main(void)
 					if (cancel_pressed)
 					{
 						cancel_pressed = 0;
+						CalibSetState(CAL_STATE_SELECT_GEAR);
+						break;
 					}
 
 					if (cancel_long_pressed)
 					{
+						GearLevel gear_now = gear_now_cached;
 						cancel_long_pressed = 0;
-						for (int i = 0; i < 5; i++)
+						if (gear_now != GEAR_INVALID && cal_complete[gear_now - 1])
 						{
-							cal_complete[i] = 0;
+							cal_complete[gear_now - 1] = 0;
+							ClearWeightCurve(gear_now);
+							current_cal_gear = gear_now;
+							no_load_speed = 0.0;
+							load_2t_speed = 0.0;
+							CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
+							break;
 						}
-						ClearAllWeightCurves();
-						current_cal_gear = GEAR_INVALID;
-						no_load_speed = 0.0;
-						load_2t_speed = 0.0;
-						CalibSetState(CAL_STATE_SELECT_GEAR);
-						break;
 					}
 					if (cal_ui_dirty)
 					{
