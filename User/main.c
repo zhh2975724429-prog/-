@@ -423,7 +423,7 @@ int main(void)
 					if (cal_ui_dirty)
 					{
 						setCalibrationSpeedUi(current_cal_gear, "0T", GetMotorSpeed(),
-							"PA9 \xE9\x87\x87\xE9\x9B\x86", "PA10 \xE5\x8F\x96\xE6\xB6\x88");
+							"PA9 \xE9\x87\x87\xE9\x9B\x86", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 						drawCalibrationScreen();
 						cal_ui_dirty = 0;
 					}
@@ -432,7 +432,7 @@ int main(void)
 					{
 						double live_speed = GetMotorSpeed();
 						setCalibrationSpeedUi(current_cal_gear, "0T", live_speed,
-							"PA9 \xE9\x87\x87\xE9\x9B\x86", "PA10 \xE5\x8F\x96\xE6\xB6\x88");
+							"PA9 \xE9\x87\x87\xE9\x9B\x86", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 						drawCalibrationCard();
 					}
 					cal_refresh_div = (cal_refresh_div + 1) % 3;
@@ -456,7 +456,7 @@ int main(void)
 					if (cal_ui_dirty)
 					{
 						setCalibrationSpeedUi(current_cal_gear, "0T", no_load_speed,
-							"PA9 \xE7\xA1\xAE\xE8\xAE\xA4", "PA10 \xE5\x8F\x96\xE6\xB6\x88");
+							"PA9 \xE7\xA1\xAE\xE8\xAE\xA4", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 						drawCalibrationScreen();
 						cal_ui_dirty = 0;
 					}
@@ -473,13 +473,13 @@ int main(void)
 					if (cancel_pressed)
 					{
 						cancel_pressed = 0;
-						CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
+						CalibSetState(CAL_STATE_CONFIRM_NO_LOAD);
 						break;
 					}
 					if (cal_ui_dirty)
 					{
 						setCalibrationSpeedUi(current_cal_gear, "2T", GetMotorSpeed(),
-							"PA9 \xE9\x87\x87\xE9\x9B\x86", "PA10 \xE5\x8F\x96\xE6\xB6\x88");
+							"PA9 \xE9\x87\x87\xE9\x9B\x86", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 						drawCalibrationScreen();
 						cal_ui_dirty = 0;
 					}
@@ -488,7 +488,7 @@ int main(void)
 					{
 						double live_speed = GetMotorSpeed();
 						setCalibrationSpeedUi(current_cal_gear, "2T", live_speed,
-							"PA9 \xE9\x87\x87\xE9\x9B\x86", "PA10 \xE5\x8F\x96\xE6\xB6\x88");
+							"PA9 \xE9\x87\x87\xE9\x9B\x86", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 						drawCalibrationCard();
 					}
 					cal_refresh_div = (cal_refresh_div + 1) % 3;
@@ -515,12 +515,12 @@ int main(void)
 						if (cal_need_recapture)
 						{
 							setCalibrationUi(current_cal_gear, "\xE9\x87\x8D\xE9\x87\x87\xE9\x9B\x86", ILI9341_RED,
-								action, "PA10 \xE5\x8F\x96\xE6\xB6\x88");
+								action, "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 						}
 						else
 						{
 							setCalibrationSpeedUi(current_cal_gear, "2T", load_2t_speed,
-								action, "PA10 \xE5\x8F\x96\xE6\xB6\x88");
+								action, "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 						}
 						drawCalibrationScreen();
 						cal_ui_dirty = 0;
@@ -545,7 +545,7 @@ int main(void)
 						{
 							cal_need_recapture = 1;
 							setCalibrationUi(current_cal_gear, "\xE9\x87\x8D\xE9\x87\x87\xE9\x9B\x86", ILI9341_RED,
-								"PA9 \xE9\x87\x8D\xE9\x87\x87\xE9\x9B\x86", "PA10 \xE5\x8F\x96\xE6\xB6\x88");
+								"PA9 \xE9\x87\x8D\xE9\x87\x87\xE9\x9B\x86", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 							drawCalibrationCard();
 							drawBottomTips();
 							cal_ui_dirty = 0;
@@ -580,7 +580,7 @@ int main(void)
 					if (cal_ui_dirty)
 					{
 						setCalibrationUi(gear_now_cached, "\xE5\x85\xA8\xE9\x83\xA8\xE5\xAE\x8C\xE6\x88\x90", CAL_COLOR_DONE,
-							"PA9 \xE8\xBF\x9B\xE5\x85\xA5", "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE5\xA4\x8D\xE4\xBD\x8D");
+							"PA9 \xE8\xBF\x9B\xE5\x85\xA5", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 						drawCalibrationScreen();
 						cal_ui_dirty = 0;
 					}
@@ -588,7 +588,7 @@ int main(void)
 					if (cal_last_drawn_gear != (uint8_t)gear_now_cached)
 					{
 						setCalibrationUi(gear_now_cached, "\xE5\x85\xA8\xE9\x83\xA8\xE5\xAE\x8C\xE6\x88\x90", CAL_COLOR_DONE,
-							"PA9 \xE8\xBF\x9B\xE5\x85\xA5", "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE5\xA4\x8D\xE4\xBD\x8D");
+							"PA9 \xE8\xBF\x9B\xE5\x85\xA5", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 						drawCalibrationCard();
 						drawGearButtons();
 						cal_last_drawn_gear = (uint8_t)gear_now_cached;
