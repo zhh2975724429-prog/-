@@ -80,7 +80,8 @@ void InputCapture_Init(void)
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
 
     gpioInitStruct.GPIO_Pin = GPIO_Pin_3;
-    gpioInitStruct.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    /* Keep PA3 defined when the rotor signal is unplugged; floating input can flood TIM2 IRQ. */
+    gpioInitStruct.GPIO_Mode = GPIO_Mode_IPD;
     gpioInitStruct.GPIO_Speed = GPIO_Speed_50MHz;
     GPIO_Init(GPIOA, &gpioInitStruct);
 
@@ -94,7 +95,7 @@ void InputCapture_Init(void)
     icInitStruct.TIM_ICPolarity = TIM_ICPolarity_Rising;
     icInitStruct.TIM_ICSelection = TIM_ICSelection_DirectTI;
     icInitStruct.TIM_ICPrescaler = TIM_ICPSC_DIV1;
-    icInitStruct.TIM_ICFilter = 0x8;
+    icInitStruct.TIM_ICFilter = 0xF;
     TIM_ICInit(TIM2, &icInitStruct);
 
     nvicInitStruct.NVIC_IRQChannel = TIM2_IRQn;
