@@ -17,11 +17,13 @@ typedef enum {
     CAL_STATE_CONFIRM_NO_LOAD = 2,
     CAL_STATE_CAPTURE_LOAD_2T = 3,
     CAL_STATE_CONFIRM_LOAD_2T = 4,
-    CAL_STATE_ALL_DONE = 5
+    CAL_STATE_GEAR_DONE = 5,
+    CAL_STATE_ALL_DONE = 6
 } CalibrationState;
 
 static CalibrationState cal_state = CAL_STATE_SELECT_GEAR;
 static GearLevel current_cal_gear = GEAR_INVALID;
+static GearLevel completed_cal_gear = GEAR_INVALID;
 static double no_load_speed = 0.0;
 static double load_2t_speed = 0.0;
 static uint8_t cal_complete[5] = {0};  // 记录各挡位的标定状态
@@ -41,35 +43,20 @@ static void CalibSetState(CalibrationState s)
 
 static void SaveCalibrationResult(void)
 {
-	uint8_t all_calibrated = 1;
+	GearLevel saved_gear = current_cal_gear;
 
+	if (saved_gear >= GEAR_1 && saved_gear <= GEAR_5)
+	{
+		cal_complete[saved_gear - 1] = 1;
+	}
+
+	/* Persist this gear immediately, then wait for PA9/PA10 on the done page. */
 	SaveWeightCurves();
-	if (current_cal_gear >= GEAR_1 && current_cal_gear <= GEAR_5)
-	{
-		cal_complete[current_cal_gear - 1] = 1;
-	}
-
-	for (int i = 0; i < 5; i++)
-	{
-		if (!cal_complete[i])
-		{
-			all_calibrated = 0;
-			break;
-		}
-	}
-
-	current_cal_gear = GEAR_INVALID;
+	completed_cal_gear = saved_gear;
 	no_load_speed = 0.0;
 	load_2t_speed = 0.0;
 
-	if (all_calibrated)
-	{
-		CalibSetState(CAL_STATE_ALL_DONE);
-	}
-	else
-	{
-		CalibSetState(CAL_STATE_SELECT_GEAR);
-	}
+	CalibSetState(CAL_STATE_GEAR_DONE);
 }
 
 static double SampleMotorSpeed(uint8_t samples)
@@ -116,7 +103,7 @@ static GearLevel cal_display_gear = GEAR_INVALID;
 static const char *cal_status_text = "--";
 static uint16_t cal_status_color = CAL_COLOR_MUTED;
 static const char *cal_tip_left = "PA9 \xE7\xA1\xAE\xE8\xAE\xA4";
-static const char *cal_tip_right = "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE5\xA4\x8D\xE4\xBD\x8D";
+static const char *cal_tip_right = "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE9\x87\x8D\xE9\x87\x87";
 static char cal_status_buffer[24];
 
 static const char *CalGearText(GearLevel gear)
@@ -191,7 +178,7 @@ static void setCalibrationSelectUi(GearLevel gear)
 	else if (cal_complete[gear - 1])
 	{
 		setCalibrationUi(gear, "\xE5\xAE\x8C\xE6\x88\x90", CAL_COLOR_DONE,
-			"\xE5\xAE\x8C\xE6\x88\x90", "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE5\xA4\x8D\xE4\xBD\x8D");
+			"\xE5\xAE\x8C\xE6\x88\x90", "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE9\x87\x8D\xE9\x87\x87");
 	}
 	else
 	{
@@ -553,6 +540,56 @@ int main(void)
 					}
 					break;
 				}
+				case CAL_STATE_GEAR_DONE:
+				{
+					GearLevel gear_done = completed_cal_gear;
+
+					if (gear_done < GEAR_1 || gear_done > GEAR_5)
+					{
+						current_cal_gear = GEAR_INVALID;
+						CalibSetState(CAL_STATE_SELECT_GEAR);
+						break;
+					}
+
+					if (cancel_long_pressed)
+					{
+						cancel_long_pressed = 0;
+						cal_complete[gear_done - 1] = 0;
+						ClearWeightCurve(gear_done);
+						current_cal_gear = gear_done;
+						completed_cal_gear = GEAR_INVALID;
+						no_load_speed = 0.0;
+						load_2t_speed = 0.0;
+						CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
+						break;
+					}
+
+					if (cancel_pressed)
+					{
+						cancel_pressed = 0;
+						current_cal_gear = GEAR_INVALID;
+						completed_cal_gear = GEAR_INVALID;
+						CalibSetState(CAL_STATE_SELECT_GEAR);
+						break;
+					}
+
+					if (cal_ui_dirty)
+					{
+						setCalibrationUi(gear_done, "\xE5\xAE\x8C\xE6\x88\x90", CAL_COLOR_DONE,
+							"PA9 \xE8\xBF\x94\xE5\x9B\x9E", "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE9\x87\x8D\xE9\x87\x87");
+						drawCalibrationScreen();
+						cal_ui_dirty = 0;
+					}
+
+					if (button_pressed)
+					{
+						button_pressed = 0;
+						current_cal_gear = GEAR_INVALID;
+						completed_cal_gear = GEAR_INVALID;
+						CalibSetState(CAL_STATE_SELECT_GEAR);
+					}
+					break;
+				}
 				case CAL_STATE_ALL_DONE:
 				{
 					if (cancel_pressed)
@@ -580,7 +617,7 @@ int main(void)
 					if (cal_ui_dirty)
 					{
 						setCalibrationUi(gear_now_cached, "\xE5\x85\xA8\xE9\x83\xA8\xE5\xAE\x8C\xE6\x88\x90", CAL_COLOR_DONE,
-							"PA9 \xE8\xBF\x9B\xE5\x85\xA5", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
+							"PA9 \xE8\xBF\x94\xE5\x9B\x9E", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 						drawCalibrationScreen();
 						cal_ui_dirty = 0;
 					}
@@ -588,7 +625,7 @@ int main(void)
 					if (cal_last_drawn_gear != (uint8_t)gear_now_cached)
 					{
 						setCalibrationUi(gear_now_cached, "\xE5\x85\xA8\xE9\x83\xA8\xE5\xAE\x8C\xE6\x88\x90", CAL_COLOR_DONE,
-							"PA9 \xE8\xBF\x9B\xE5\x85\xA5", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
+							"PA9 \xE8\xBF\x94\xE5\x9B\x9E", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
 						drawCalibrationCard();
 						drawGearButtons();
 						cal_last_drawn_gear = (uint8_t)gear_now_cached;
@@ -597,8 +634,7 @@ int main(void)
 					if (button_pressed)
 					{
 						button_pressed = 0;
-						current_mode = MODE_MONITOR;
-						mode_switch_flag = 1;
+						CalibSetState(CAL_STATE_SELECT_GEAR);
 					}
 					break;
 				}
