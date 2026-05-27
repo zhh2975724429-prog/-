@@ -21,13 +21,13 @@ typedef enum {
 
 static CalibrationState cal_state = CAL_STATE_SELECT_GEAR;
 static GearLevel current_cal_gear = GEAR_INVALID;
-static GearLevel cal_failed_gear = GEAR_INVALID;
 static double no_load_speed = 0.0;
 static double load_2t_speed = 0.0;
 static uint8_t cal_complete[5] = {0};  // 记录各挡位的标定状态
 
 static uint8_t cal_ui_dirty = 1;
 static uint8_t cal_refresh_div = 0;
+static uint8_t cal_need_recapture = 0;
 static uint8_t cal_last_drawn_gear = 0xFF;
 
 static void CalibSetState(CalibrationState s)
@@ -50,9 +50,9 @@ static void SaveCalibrationResult(void)
 	/* Persist this gear immediately so calibration survives power loss. */
 	SaveWeightCurves();
 	current_cal_gear = GEAR_INVALID;
-	cal_failed_gear = GEAR_INVALID;
 	no_load_speed = 0.0;
 	load_2t_speed = 0.0;
+	cal_need_recapture = 0;
 
 	CalibSetState(CAL_STATE_SELECT_GEAR);
 }
@@ -177,11 +177,6 @@ static void setCalibrationSelectUi(GearLevel gear)
 	{
 		setCalibrationUi(gear, "\xE5\xAE\x8C\xE6\x88\x90", CAL_COLOR_DONE,
 			"\xE5\xAE\x8C\xE6\x88\x90", "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE9\x87\x8D\xE9\x87\x87");
-	}
-	else if (gear == cal_failed_gear)
-	{
-		setCalibrationUi(gear, "\xE5\xA4\xB1\xE8\xB4\xA5", ILI9341_RED,
-			"PA9 \xE5\xBC\x80\xE5\xA7\x8B", "");
 	}
 	else
 	{
@@ -364,9 +359,9 @@ int main(void)
 							cal_complete[gear_now - 1] = 0;
 							ClearWeightCurve(gear_now);
 							current_cal_gear = gear_now;
-							cal_failed_gear = GEAR_INVALID;
 							no_load_speed = 0.0;
 							load_2t_speed = 0.0;
+							cal_need_recapture = 0;
 							CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
 							break;
 						}
@@ -380,9 +375,9 @@ int main(void)
 							if (!cal_complete[gear_now - 1])
 							{
 								current_cal_gear = gear_now;
-								cal_failed_gear = GEAR_INVALID;
 								no_load_speed = 0.0;
 								load_2t_speed = 0.0;
+								cal_need_recapture = 0;
 								CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
 							}
 						}
@@ -404,6 +399,7 @@ int main(void)
 						current_cal_gear = GEAR_INVALID;
 						no_load_speed = 0.0;
 						load_2t_speed = 0.0;
+						cal_need_recapture = 0;
 						CalibSetState(CAL_STATE_SELECT_GEAR);
 						break;
 					}
@@ -437,6 +433,7 @@ int main(void)
 					if (cancel_pressed)
 					{
 						cancel_pressed = 0;
+						cal_need_recapture = 0;
 						CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
 						break;
 					}
@@ -460,6 +457,7 @@ int main(void)
 					if (cancel_pressed)
 					{
 						cancel_pressed = 0;
+						cal_need_recapture = 0;
 						CalibSetState(CAL_STATE_CONFIRM_NO_LOAD);
 						break;
 					}
@@ -493,13 +491,23 @@ int main(void)
 					if (cancel_pressed)
 					{
 						cancel_pressed = 0;
+						cal_need_recapture = 0;
 						CalibSetState(CAL_STATE_CAPTURE_LOAD_2T);
 						break;
 					}
 					if (cal_ui_dirty)
 					{
-						setCalibrationSpeedUi(current_cal_gear, "2T", load_2t_speed,
-							"PA9 \xE7\xA1\xAE\xE8\xAE\xA4", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
+						const char *action = cal_need_recapture ? "PA9 \xE9\x87\x8D\xE9\x87\x87\xE9\x9B\x86" : "PA9 \xE7\xA1\xAE\xE8\xAE\xA4";
+						if (cal_need_recapture)
+						{
+							setCalibrationUi(current_cal_gear, "\xE9\x87\x8D\xE9\x87\x87\xE9\x9B\x86", ILI9341_RED,
+								action, "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
+						}
+						else
+						{
+							setCalibrationSpeedUi(current_cal_gear, "2T", load_2t_speed,
+								action, "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
+						}
 						drawCalibrationScreen();
 						cal_ui_dirty = 0;
 					}
@@ -507,18 +515,26 @@ int main(void)
 					if (button_pressed)
 					{
 						button_pressed = 0;
+						if (cal_need_recapture)
+						{
+							cal_need_recapture = 0;
+							CalibSetState(CAL_STATE_CAPTURE_LOAD_2T);
+							break;
+						}
 
 						if (CalibrateWeightCurve(current_cal_gear, no_load_speed, load_2t_speed))
 						{
+							cal_need_recapture = 0;
 							SaveCalibrationResult();
 						}
 						else
 						{
-							cal_failed_gear = current_cal_gear;
-							current_cal_gear = GEAR_INVALID;
-							no_load_speed = 0.0;
-							load_2t_speed = 0.0;
-							CalibSetState(CAL_STATE_SELECT_GEAR);
+							cal_need_recapture = 1;
+							setCalibrationUi(current_cal_gear, "\xE9\x87\x8D\xE9\x87\x87\xE9\x9B\x86", ILI9341_RED,
+								"PA9 \xE9\x87\x8D\xE9\x87\x87\xE9\x9B\x86", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
+							drawCalibrationCard();
+							drawBottomTips();
+							cal_ui_dirty = 0;
 						}
 					}
 					break;
