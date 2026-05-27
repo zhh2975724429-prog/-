@@ -16,14 +16,11 @@ typedef enum {
     CAL_STATE_CAPTURE_NO_LOAD = 1,
     CAL_STATE_CONFIRM_NO_LOAD = 2,
     CAL_STATE_CAPTURE_LOAD_2T = 3,
-    CAL_STATE_CONFIRM_LOAD_2T = 4,
-    CAL_STATE_GEAR_DONE = 5,
-    CAL_STATE_ALL_DONE = 6
+    CAL_STATE_CONFIRM_LOAD_2T = 4
 } CalibrationState;
 
 static CalibrationState cal_state = CAL_STATE_SELECT_GEAR;
 static GearLevel current_cal_gear = GEAR_INVALID;
-static GearLevel completed_cal_gear = GEAR_INVALID;
 static double no_load_speed = 0.0;
 static double load_2t_speed = 0.0;
 static uint8_t cal_complete[5] = {0};  // 记录各挡位的标定状态
@@ -50,13 +47,14 @@ static void SaveCalibrationResult(void)
 		cal_complete[saved_gear - 1] = 1;
 	}
 
-	/* Persist this gear immediately, then wait for PA9/PA10 on the done page. */
+	/* Persist this gear immediately so calibration survives power loss. */
 	SaveWeightCurves();
-	completed_cal_gear = saved_gear;
+	current_cal_gear = GEAR_INVALID;
 	no_load_speed = 0.0;
 	load_2t_speed = 0.0;
+	cal_need_recapture = 0;
 
-	CalibSetState(CAL_STATE_GEAR_DONE);
+	CalibSetState(CAL_STATE_SELECT_GEAR);
 }
 
 static double SampleMotorSpeed(uint8_t samples)
@@ -289,14 +287,7 @@ int main(void)
 			cal_complete[i] = ((curve_mask & (1U << i)) != 0U) ? 1U : 0U;
 		}
 
-		if (WeightCurvesValid())
-		{
-			CalibSetState(CAL_STATE_ALL_DONE);
-		}
-		else
-		{
-			CalibSetState(CAL_STATE_SELECT_GEAR);
-		}
+		CalibSetState(CAL_STATE_SELECT_GEAR);
 	}
 	
 	// 再等待一段时间，让所有模块稳定
@@ -370,6 +361,7 @@ int main(void)
 							current_cal_gear = gear_now;
 							no_load_speed = 0.0;
 							load_2t_speed = 0.0;
+							cal_need_recapture = 0;
 							CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
 							break;
 						}
@@ -383,6 +375,9 @@ int main(void)
 							if (!cal_complete[gear_now - 1])
 							{
 								current_cal_gear = gear_now;
+								no_load_speed = 0.0;
+								load_2t_speed = 0.0;
+								cal_need_recapture = 0;
 								CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
 							}
 						}
@@ -404,6 +399,7 @@ int main(void)
 						current_cal_gear = GEAR_INVALID;
 						no_load_speed = 0.0;
 						load_2t_speed = 0.0;
+						cal_need_recapture = 0;
 						CalibSetState(CAL_STATE_SELECT_GEAR);
 						break;
 					}
@@ -437,6 +433,7 @@ int main(void)
 					if (cancel_pressed)
 					{
 						cancel_pressed = 0;
+						cal_need_recapture = 0;
 						CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
 						break;
 					}
@@ -460,6 +457,7 @@ int main(void)
 					if (cancel_pressed)
 					{
 						cancel_pressed = 0;
+						cal_need_recapture = 0;
 						CalibSetState(CAL_STATE_CONFIRM_NO_LOAD);
 						break;
 					}
@@ -493,6 +491,7 @@ int main(void)
 					if (cancel_pressed)
 					{
 						cancel_pressed = 0;
+						cal_need_recapture = 0;
 						CalibSetState(CAL_STATE_CAPTURE_LOAD_2T);
 						break;
 					}
@@ -537,104 +536,6 @@ int main(void)
 							drawBottomTips();
 							cal_ui_dirty = 0;
 						}
-					}
-					break;
-				}
-				case CAL_STATE_GEAR_DONE:
-				{
-					GearLevel gear_done = completed_cal_gear;
-
-					if (gear_done < GEAR_1 || gear_done > GEAR_5)
-					{
-						current_cal_gear = GEAR_INVALID;
-						CalibSetState(CAL_STATE_SELECT_GEAR);
-						break;
-					}
-
-					if (cancel_long_pressed)
-					{
-						cancel_long_pressed = 0;
-						cal_complete[gear_done - 1] = 0;
-						ClearWeightCurve(gear_done);
-						current_cal_gear = gear_done;
-						completed_cal_gear = GEAR_INVALID;
-						no_load_speed = 0.0;
-						load_2t_speed = 0.0;
-						CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
-						break;
-					}
-
-					if (cancel_pressed)
-					{
-						cancel_pressed = 0;
-						current_cal_gear = GEAR_INVALID;
-						completed_cal_gear = GEAR_INVALID;
-						CalibSetState(CAL_STATE_SELECT_GEAR);
-						break;
-					}
-
-					if (cal_ui_dirty)
-					{
-						setCalibrationUi(gear_done, "\xE5\xAE\x8C\xE6\x88\x90", CAL_COLOR_DONE,
-							"PA9 \xE8\xBF\x94\xE5\x9B\x9E", "PA10 \xE9\x95\xBF\xE6\x8C\x89\xE9\x87\x8D\xE9\x87\x87");
-						drawCalibrationScreen();
-						cal_ui_dirty = 0;
-					}
-
-					if (button_pressed)
-					{
-						button_pressed = 0;
-						current_cal_gear = GEAR_INVALID;
-						completed_cal_gear = GEAR_INVALID;
-						CalibSetState(CAL_STATE_SELECT_GEAR);
-					}
-					break;
-				}
-				case CAL_STATE_ALL_DONE:
-				{
-					if (cancel_pressed)
-					{
-						cancel_pressed = 0;
-						CalibSetState(CAL_STATE_SELECT_GEAR);
-						break;
-					}
-
-					if (cancel_long_pressed)
-					{
-						GearLevel gear_now = gear_now_cached;
-						cancel_long_pressed = 0;
-						if (gear_now != GEAR_INVALID && cal_complete[gear_now - 1])
-						{
-							cal_complete[gear_now - 1] = 0;
-							ClearWeightCurve(gear_now);
-							current_cal_gear = gear_now;
-							no_load_speed = 0.0;
-							load_2t_speed = 0.0;
-							CalibSetState(CAL_STATE_CAPTURE_NO_LOAD);
-							break;
-						}
-					}
-					if (cal_ui_dirty)
-					{
-						setCalibrationUi(gear_now_cached, "\xE5\x85\xA8\xE9\x83\xA8\xE5\xAE\x8C\xE6\x88\x90", CAL_COLOR_DONE,
-							"PA9 \xE8\xBF\x94\xE5\x9B\x9E", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
-						drawCalibrationScreen();
-						cal_ui_dirty = 0;
-					}
-
-					if (cal_last_drawn_gear != (uint8_t)gear_now_cached)
-					{
-						setCalibrationUi(gear_now_cached, "\xE5\x85\xA8\xE9\x83\xA8\xE5\xAE\x8C\xE6\x88\x90", CAL_COLOR_DONE,
-							"PA9 \xE8\xBF\x94\xE5\x9B\x9E", "PA10 \xE8\xBF\x94\xE5\x9B\x9E");
-						drawCalibrationCard();
-						drawGearButtons();
-						cal_last_drawn_gear = (uint8_t)gear_now_cached;
-					}
-
-					if (button_pressed)
-					{
-						button_pressed = 0;
-						CalibSetState(CAL_STATE_SELECT_GEAR);
 					}
 					break;
 				}
